@@ -3,9 +3,100 @@ title: "week12notes"
 format: html 
 ---
 
+```{R}
+packages <- c(
+  "dplyr", 
+  "readr", 
+  "tidyr", 
+  "purrr", 
+  "stringr", 
+  "corrplot", 
+  "car", 
+  "caret", 
+  "torch", 
+  "nnet", 
+  "broom",
+  "torch",
+  "torchvision",
+  "e1071",
+  "glmnet",
+  "nnet",
+  "rpart",
+  "ISLR2"
+)
+
+renv::install(packages)
+sapply(packages, require, character.only=T)
+```
+
+
+
 ## Tuesday April 4th
 
+```r
+F <- hh1_module()
+F( torch_randn(20,2) )
+# output would be 20 by 1 tensor, that contains the sigmoid probabilities
+
+# if get rid of activation layer (reLU), output doesn't change since activation is only happening internally (will still see probability values)
+
+# if get rid of sigmoid layer, will still by 20 by 1 tensor that instead shows actual values and not probabilities (may have negative numbers)
 
 
+F <- hh2_module()
+F( torch_randn(20,2) )
+```
+
+
+```r
+f <- classifier(df "___") --> "rpart", "nn", ...
+plt(f, df_new)
+overview(df)
+```
+
+
+
+Exponentially increasing sin wave
+```{r}
+generate_data <- function(n, noise = 0.1) {
+  x <- seq(1*pi, 1.7*pi, length.out = n)
+  y <- exp(x) * (sin(150/x) + rnorm(n, 0, noise))
+  data.frame(x = x, y = y)
+}
+
+df <- generate_data(200, noise = 0.1)
+plot(df$x, df$y, pch=19)
+```
+
+```{r}
+plt_reg <- function (f, x){
+  ynew <- f(x)
+  ylim <- range(c(ynew, df$y))
+  ylim[1] <- max(c(-800, ylim[1]))
+  ylim[2] <- min(c(250, ylim[2]))
+  xlim <-range(x)
+  plot(df$x, df$y, pch = 22, col = 'red', xlim=xlim, ylim = ylim)
+  points(x[,1], ynew, pch=22, type='l')
+}  
+```
+
+```r
+
+```
+
+
+```r
+regressor formula is same as classifier except it uses nn_mse_loss() instead 
+of nn_bce_loss()
+
+can change learning rate to mess around with output to get different results
+```
+
+
+
+```r
+f <- regressor(df, "lm") --> "rpart", "svm", "nn"
+plt_reg(f, df_new)
+```
 
 ## Thursday April 6th
