@@ -210,13 +210,6 @@ F( torch_randn(20,2) )
 ```
 
 
-```r
-f <- classifier(df "___") --> "rpart", "nn", ...
-plt(f, df_new)
-overview(df)
-```
-
-
 
 Exponentially increasing sin wave
 ```{r}
@@ -282,7 +275,7 @@ regressor <-
     return(f)
   }
 
-#can change learning rate to mess around with output to get different results
+# can change learning rate to mess around with output to get different results
 ```
 
 ```{r}
@@ -311,6 +304,224 @@ plt(f, df_new)
 #overview(df)
 ```
 
-```{r}
+
+
+
 
 ## Thursday April 6th
+
+
+#### Allow for hyperparameters in the neural network 
+```{r}
+nn_model <- nn_module(
+  initialize = function(p, q1) {
+    self$f <- nn_linear(p,q1)
+    self$g <- nn_linear(q1,1)
+    self$a <- nn_relu()
+    self$s <- nn_sigmoid()
+  },
+  forward = function(x) {
+    x %>%
+      self$f() %>%
+      self$a() %>%
+      self$g() %>%
+      self$s()
+  }
+)
+
+# look at 10 row, 2 column tensor of random values
+# changing second number --> change p in the function input
+x <- torch_randn(10,2)
+x
+
+# p&q are hyperparameters
+# will optimize the weights and biases of the neural network
+nn_model(p = 2, q1 = 10)(x)
+```
+
+#### Luz Setup
+```{r}
+nn_model %>%
+  setup(
+    loss = nn_bce_loss(),
+    optimizer = optim_adam
+  )
+```
+*Setup function takes in 2 mandatory arguments --> the loss function and the optimizer (used for minmimizing loss)
+  1. optimizer could be optim_adam, optim_rmsprop, ...
+
+
+
+The code above is equivalent to...
+```r
+ F <- hh2_module()
+ optimizer <- optim_adam(F$parameters, lr = 0.05)
+ epochs <- 1000
+      
+ for (i in 1:epochs){
+    loss <- nn_mse_loss()(F(X_tensor), y_tensor)
+    optimizer$zero_grad()
+    loss$backward()
+    optimizer$step()
+    }
+```
+
+Things we may want to specify
+
+1. Epochs
+1. Gradient descent step
+1. x,y as tensors
+1. Learning rate
+1. what p & q are
+
+#### Luz hyperparameters
+```{r}
+hh2_module <- nn_module(
+  initialize = function(p, q1, q2, q3) {
+    self$f <- nn_linear(p,q1)
+    self$g <- nn_linear(q1,q2)
+    self$h <- nn_linear(q2,q3)
+    self$i <- nn_linear(q3,1)
+    self$a <- nn_relu()
+    self$s <- nn_sigmoid()
+  },
+  forward = function(x) {
+    x %>%
+      self$f() %>%
+      self$a() %>%
+      self$g() %>%
+      self$a() %>%
+      self$h() %>%
+      self$a() %>%
+      self$i() %>%
+      self$s()
+  }
+)
+
+hh2_module %>%
+  setup(
+    loss = nn_bce_loss(),
+    optimizer = optim_adam
+  ) %>%
+  set_hparams(p=2, q1=5, q2=7,q3=5) %>%
+  set_opt_hparams(lr=0.02)
+```
+
+
+
+#### Luz Fit
+
+```{r}
+fit_nn <- hh2_module %>%
+  setup(
+    loss = nn_bce_loss(),
+    optimizer = optim_adam
+  ) %>%
+  set_hparams(p = 2, q1 = 5, q2 = 7, q3 = 5) %>%
+  set_opt_hparams(lr = 0.02) %>%
+  # Fit the neural network
+  # Have to change formatting b/c torch can only read matrices, not data frames
+  fit(
+    data = list(
+      as.matrix(df[,-1]),
+      as.numeric(df[,1]) - 1
+    ),
+    epochs = 10,
+    verbose = TRUE
+  )
+```
+
+
+
+```r
+# plots change in loss for the epochs specified
+plot(fit_nn)
+```
+
+
+The output of the Luz allows you to use the familiar predict function
+```r
+predict(fit_nn, Xnew)
+predict(fit_nn, cbind(rnorm(10), rnorm(10))) %>% as.array
+```
+
+
+#### Luz Validation Data
+
+```{r}
+test_ind <- sample(1:nrow(df), 23, replace = FALSE) 
+```
+
+ADD 'DF' CODE FROM PICTURE
+
+```{r}
+fit_nn <- hh2_module %>%
+  setup(
+    loss = nn_bce_loss(),
+    optimizer = optim_adam
+  ) %>%
+  set_hparams(p = 2, q1 = 5, q2 = 7, q3 = 5) %>%
+  set_opt_hparams(lr = 0.02) %>%
+  fit(
+    data = list(
+      as.matrix(df[-test_ind,-1]),
+      as.numeric(df[-test_ind,1]) - 1
+    ),
+    valid_data = list(
+      as.matrix(df[+test_ind, -1]),
+      as.numeric(df[+test_ind,1]) - 1
+    ),
+    epochs = 10,
+    verbose = TRUE
+  )
+```
+
+```r
+plot(fit_nn)
+```
+
+* Luz has built in metrics (ex. accuracy, mse, ...)
+* Do luz_metric_ and the function options will appear
+
+
+```{r}
+predicted <- torch_randn(sample(0:1, 100, replace = TRUE) )
+expected <- torch_randn(sample(0:1, 100, replace = TRUE) )
+metric <- luz_metric_binary_accuracy()
+
+metric <-  metric$new()
+metric$update(predicted, expected)
+metric$compute()
+```
+
+```{r}
+fit_nn <- hh2_module %>%
+  setup(
+    loss = nn_bce_loss(),
+    optimizer = optim_adam,
+    # specifying metrics we want to use
+    metrics = list(
+      luz_metric_binary_accuracy(),
+      luz_metric_binary_auroc()
+    )
+  ) %>% 
+  set_hparams(p = 2, q1 = 5, q2 = 7, q3 = 5) %>%
+  set_opt_hparams(lr = 0.02) %>%
+  fit(
+    data = list(
+      as.matrix(df[-test_ind,-1]),
+      as.numeric(df[-test_ind,1]) - 1
+    ),
+    valid_data = list(
+      as.matrix(df[+test_ind, -1]),
+      as.numeric(df[+test_ind,1]) - 1
+    ),
+    epochs = 50,
+    verbose = TRUE
+  )
+```
+
+```{r}
+plot(fit_nn)
+```
+
