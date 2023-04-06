@@ -22,7 +22,9 @@ packages <- c(
   "glmnet",
   "nnet",
   "rpart",
-  "ISLR2"
+  "ISLR2",
+  'luz',
+  'torchvision'
 )
 
 renv::install(packages)
