@@ -11,7 +11,7 @@ format: html
 ---
 
 
-## Thursday, Jan 19
+## Thursday, April 6
 
 
 
@@ -55,14 +55,36 @@ packages <- c(
 renv::install(packages)
 sapply(packages, require, character.only=T)
 ```
+```{r}
+ex <- \(x) ifelse(
+  ((abs(x[1]) + 0.05 * rnorm(1) > 0.50 & abs(x[2]) + 0.05 * rnorm(1) > 0.50)) |
+  ((abs(x[1]) + 0.05 * rnorm(1) < 0.25 & abs(x[2]) + 0.05 * rnorm(1) < 0.25)),1,0  
+)
 
+n <- 300
+X <- t(replicate(n, 2 * runif(2) - 1))
+y <- apply(X, 1, ex) %>% as.factor()
+col <- ifelse(y == 0, 'blue', 'red')
+df <- data.frame(y = y, x1 = X[,1], x2 = X[,2])
+model 
+plot(df$x1, df$x2, col = col, pch = 19)
+
+Xnew <- cbind(
+  rep(seq(-1.1, 1.1, length.out = 50), 50),
+  rep(seq(-1.1, 1.1, length.out = 50), each = 50)
+)
+
+df_new = data.frame(x1 = Xnew[,1], x2 = Xnew[,2])
+```
 
 #### Allow for hyperparameters in the neural network 
 ```{r}
 nn_model <- nn_module(
-  initialize = function(p, q1) {
+  initialize = function(p, q1, q2, q3) {
     self$f <- nn_linear(p,q1)
-    self$g <- nn_linear(q1,1)
+    self$g <- nn_linear(q1, q2)
+    self$h <- nn_linear(q2, q3)
+    self$i <- nn_linear(q3, 1)
     self$a <- nn_relu()
     self$s <- nn_sigmoid()
   },
@@ -71,18 +93,14 @@ nn_model <- nn_module(
       self$f() %>%
       self$a() %>%
       self$g() %>%
+      self$a() %>%
+      self$h() %>%
+      self$a() %>%
+      self$i() %>%
       self$s()
   }
 )
 
-# look at 10 row, 2 column tensor of random values
-# changing second number --> change p in the function input
-x <- torch_randn(10,2)
-x
-
-# p&q are hyperparameters
-# will optimize the weights and biases of the neural network
-nn_model(p = 2, q1 = 10)(x)
 ```
 
 #### Luz Setup
@@ -158,7 +176,7 @@ hh2_module %>%
 #### Luz Fit
 
 ```{r}
-fit_nn <- hh2_module %>%
+fit_nn <- nn_model %>%
   setup(
     loss = nn_bce_loss(),
     optimizer = optim_adam
@@ -179,14 +197,14 @@ fit_nn <- hh2_module %>%
 
 
 
-```r
+```{r}
 # plots change in loss for the epochs specified
 plot(fit_nn)
 ```
 
 
 The output of the Luz allows you to use the familiar predict function
-```r
+```{r}
 predict(fit_nn, Xnew)
 predict(fit_nn, cbind(rnorm(10), rnorm(10))) %>% as.array
 ```
@@ -206,7 +224,7 @@ fit_nn <- hh2_module %>%
     loss = nn_bce_loss(),
     optimizer = optim_adam
   ) %>%
-  set_hparams(p = 2, q1 = 5, q2 = 7, q3 = 5) %>%
+  set_hparams(p = 1, q1 = 5, q2 = 7, q3 = 5) %>%
   set_opt_hparams(lr = 0.02) %>%
   fit(
     data = list(
@@ -222,7 +240,7 @@ fit_nn <- hh2_module %>%
   )
 ```
 
-```r
+```{r}
 plot(fit_nn)
 ```
 
@@ -231,13 +249,12 @@ plot(fit_nn)
 
 
 ```{r}
-predicted <- torch_randn(sample(0:1, 100, replace = TRUE) )
-expected <- torch_randn(sample(0:1, 100, replace = TRUE) )
+predicted <- torch_randn(100)
+expected <- torch_randn(100)
 metric <- luz_metric_binary_accuracy()
 
 metric <-  metric$new()
 metric$update(predicted, expected)
-metric$compute()
 ```
 
 ```{r}
