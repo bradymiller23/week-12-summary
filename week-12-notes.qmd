@@ -339,7 +339,63 @@ x
 nn_model(p = 2, q1 = 10)(x)
 ```
 
-#### Luz Setup
+Creating a dataset that we can use with luz and neural network to make
+predictions with
+```{r}
+ex <- \(x) ifelse(
+  ((abs(x[1]) + 0.05 * rnorm(1) > 0.50 & abs(x[2]) + 0.05 * rnorm(1) > 0.50)) |
+  ((abs(x[1]) + 0.05 * rnorm(1) < 0.25 & abs(x[2]) + 0.05 * rnorm(1) < 0.25)),1,0  
+)
+
+n <- 300
+X <- t(replicate(n, 2 * runif(2) - 1))
+y <- apply(X, 1, ex) %>% as.factor()
+col <- ifelse(y == 0, 'blue', 'red')
+df <- data.frame(y = y, x1 = X[,1], x2 = X[,2])
+model <- glm(y ~ x1 + x2, df, family = binomial())
+plot(df$x1, df$x2, col = col, pch = 19)
+
+xnew <- cbind(
+  rep(seq(-1.1, 1.1, length.out = 50), 50),
+  rep(seq(-1.1, 1.1, length.out = 50), each = 50)
+)
+
+df_new = data.frame(x1 = xnew[,1], x2 = xnew[,2])
+```
+
+
+#### Luz Hyperparameters
+
+We can use hyperparameters to specify the inputs for the neural network so we 
+can create our own inputs/dimensions for the hidden layers
+```{r}
+nn_model <- nn_module(
+  initialize = function(p, q1, q2, q3) {
+    self$f <- nn_linear(p,q1)
+    self$g <- nn_linear(q1, q2)
+    self$h <- nn_linear(q2, q3)
+    self$i <- nn_linear(q3, 1)
+    self$a <- nn_relu()
+    self$s <- nn_sigmoid()
+  },
+  forward = function(x) {
+    x %>%
+      self$f() %>%
+      self$a() %>%
+      self$g() %>%
+      self$a() %>%
+      self$h() %>%
+      self$a() %>%
+      self$i() %>%
+      self$s()
+  }
+)
+```
+
+
+#### Luz Setup & Fit
+
+In this next section, I while show how to use luz to setup and fit the nn model
 ```{r}
 nn_model %>%
   setup(
@@ -347,7 +403,8 @@ nn_model %>%
     optimizer = optim_adam
   )
 ```
-*Setup function takes in 2 mandatory arguments --> the loss function and the optimizer (used for minmimizing loss)
+*Setup function takes in 2 mandatory arguments --> the loss function and the 
+optimizer (used for minmimizing loss)
   1. optimizer could be optim_adam, optim_rmsprop, ...
 
 
@@ -366,7 +423,7 @@ The code above is equivalent to...
     }
 ```
 
-Things we may want to specify
+Other things we may want to specify
 
 1. Epochs
 1. Gradient descent step
@@ -374,45 +431,10 @@ Things we may want to specify
 1. Learning rate
 1. what p & q are
 
-#### Luz hyperparameters
+
+These things listed above are now added/specified in the code below
 ```{r}
-hh2_module <- nn_module(
-  initialize = function(p, q1, q2, q3) {
-    self$f <- nn_linear(p,q1)
-    self$g <- nn_linear(q1,q2)
-    self$h <- nn_linear(q2,q3)
-    self$i <- nn_linear(q3,1)
-    self$a <- nn_relu()
-    self$s <- nn_sigmoid()
-  },
-  forward = function(x) {
-    x %>%
-      self$f() %>%
-      self$a() %>%
-      self$g() %>%
-      self$a() %>%
-      self$h() %>%
-      self$a() %>%
-      self$i() %>%
-      self$s()
-  }
-)
-
-hh2_module %>%
-  setup(
-    loss = nn_bce_loss(),
-    optimizer = optim_adam
-  ) %>%
-  set_hparams(p=2, q1=5, q2=7,q3=5) %>%
-  set_opt_hparams(lr=0.02)
-```
-
-
-
-#### Luz Fit
-
-```{r}
-fit_nn <- hh2_module %>%
+fit_nn <- nn_model %>%
   setup(
     loss = nn_bce_loss(),
     optimizer = optim_adam
@@ -432,30 +454,35 @@ fit_nn <- hh2_module %>%
 ```
 
 
-
-```r
+```{r}
 # plots change in loss for the epochs specified
 plot(fit_nn)
 ```
+Based on the plot, we can see that loss does decrease a little bit, but it 
+jumps around, both increasing and decreasing after the initial decrease.
 
 
-The output of the Luz allows you to use the familiar predict function
-```r
-predict(fit_nn, Xnew)
+
+The output of the Luz allows you to use the predict function
+```{r}
+predict(fit_nn, xnew)
+```
+
+```{r}
 predict(fit_nn, cbind(rnorm(10), rnorm(10))) %>% as.array
 ```
 
 
-#### Luz Validation Data
+#### Luz Validation Data and Metrics
 
+Randomly selecting the indicies of 23 rows in the data frame without replacement
 ```{r}
 test_ind <- sample(1:nrow(df), 23, replace = FALSE) 
 ```
 
-ADD 'DF' CODE FROM PICTURE
-
+Using the luz code we created to validate the data
 ```{r}
-fit_nn <- hh2_module %>%
+fit_nn <- nn_model %>%
   setup(
     loss = nn_bce_loss(),
     optimizer = optim_adam
@@ -476,17 +503,20 @@ fit_nn <- hh2_module %>%
   )
 ```
 
-```r
+```{r}
 plot(fit_nn)
 ```
+From this plot we can see that the loss generally decreases of for the training
+data and has a greater loss value than the test data throughout the epochs, but 
+the test data switches between increasing and decreasing as the number of epochs
+increases.
 
-* Luz has built in metrics (ex. accuracy, mse, ...)
-* Do luz_metric_ and the function options will appear
 
 
+* Luz has built in metrics(ex. accuracy, mse, ...) some of which are shown below
 ```{r}
-predicted <- torch_randn(sample(0:1, 100, replace = TRUE) )
-expected <- torch_randn(sample(0:1, 100, replace = TRUE) )
+predicted <- torch_randn(100)
+expected <- torch_randn(100)
 metric <- luz_metric_binary_accuracy()
 
 metric <-  metric$new()
@@ -494,8 +524,11 @@ metric$update(predicted, expected)
 metric$compute()
 ```
 
+
+This time we are specifiying the metrics we want to include, in the fitting of 
+the neural network model
 ```{r}
-fit_nn <- hh2_module %>%
+fit_nn <- nn_model %>%
   setup(
     loss = nn_bce_loss(),
     optimizer = optim_adam,
@@ -524,4 +557,12 @@ fit_nn <- hh2_module %>%
 ```{r}
 plot(fit_nn)
 ```
+Based on the graphs, we can see that the accuracy on the test and train data 
+are both low (with test accuracy ending up lower). Also, both a relatively 
+steady at the beginning but decrease as the number of epochs gets higher. For
+the AUC value, both the train and test values end around the same value, but the 
+train AUC value is more steady towards the end of the epochs while the test AUC
+jumps around. Finally, for the loss, both the test and train data decrease a 
+significant amount of value, once again with the training loss having a more 
+steady/consistent decrease while the test loss flucuates more.
 
